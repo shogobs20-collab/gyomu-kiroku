@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>業務記録 整形係</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#161927">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: linear-gradient(175deg, #12141f 0%, #1a1e2e 60%, #161927 100%);
+    color: #d8dae3;
+    font-family: -apple-system, "Hiragino Sans", sans-serif;
+    padding: env(safe-area-inset-top) 14px calc(90px + env(safe-area-inset-bottom));
+  }
+  .frame { max-width: 640px; margin: 0 auto; }
+  header { text-align: center; padding: 18px 0 14px; }
+  .eyebrow { font-size: 10px; letter-spacing: .35em; color: #8a8fa8; }
+  h1 { font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; font-size: 21px; font-weight: 600; color: #eceef5; letter-spacing: .08em; margin-top: 4px; }
+  .section { font-size: 11px; letter-spacing: .3em; color: #8a8fa8; border-bottom: 1px solid #2e3348; padding-bottom: 6px; margin: 18px 0 12px; }
+  label { font-size: 12px; color: #b8bccf; display: block; margin-bottom: 5px; letter-spacing: .08em; }
+  .hint { font-size: 10px; color: #6d7288; margin-left: 6px; }
+  input[type=text], input[type=date], input[type=password], textarea {
+    width: 100%; background: #0e101a; border: 1px solid #2e3348; border-radius: 8px;
+    color: #e4e6ef; font-size: 16px; padding: 10px 12px; outline: none; margin-bottom: 12px;
+    font-family: inherit; line-height: 1.6; -webkit-appearance: none;
+  }
+  textarea { resize: vertical; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  .quickbar { display: flex; gap: 8px; margin-bottom: 8px; }
+  .quickbar button {
+    flex: 1; padding: 10px 0; background: #232840; color: #d8dae3;
+    border: 1px solid #3d4361; border-radius: 8px; font-size: 13px;
+  }
+  .btn-main {
+    display: block; width: 100%; padding: 14px 0; margin-top: 6px;
+    background: #454b6e; color: #f0f1f7; border: 1px solid #5a6190; border-radius: 8px;
+    font-size: 15px; letter-spacing: .2em;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  }
+  .btn-main:disabled { background: #3a3f58; }
+  .btn-sub {
+    padding: 9px 16px; background: #2b3050; color: #eceef5;
+    border: 1px solid #5a6190; border-radius: 8px; font-size: 13px;
+  }
+  .btn-danger { border-color: #6e4552; color: #e8b8c4; background: transparent; }
+  .msg { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 12px; }
+  .msg.error { background: #2a1c22; border: 1px solid #6e4552; color: #e8b8c4; }
+  .msg.ok { background: #1c2a22; border: 1px solid #456e52; color: #b8e8c4; }
+  .memo-item {
+    background: #0e101a; border: 1px solid #2e3348; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 10px;
+  }
+  .memo-item .title { font-size: 14px; color: #eceef5; }
+  .memo-item .meta { font-size: 11px; color: #6d7288; margin-top: 3px; }
+  .memo-item .badge { font-size: 10px; color: #b8e8c4; border: 1px solid #456e52; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+  .result-box {
+    background: #0e101a; border: 1px solid #3d4361; border-radius: 8px;
+    padding: 14px 16px; white-space: pre-wrap; font-size: 13px; line-height: 1.8; margin: 10px 0;
+  }
+  .note { font-size: 11px; color: #5f6479; line-height: 1.9; margin-top: 14px; }
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #0e101acc; backdrop-filter: blur(10px);
+    border-top: 1px solid #2e3348; display: flex;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; padding: 14px 0 12px; background: none; border: none;
+    color: #6d7288; font-size: 12px; letter-spacing: .1em;
+  }
+  nav button.active { color: #eceef5; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .offline-flag { font-size: 11px; color: #c9a86a; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <div class="eyebrow">BUTLER'S LEDGER</div>
+    <h1>業務記録 整形係</h1>
+    <div id="offlineFlag" class="offline-flag" style="display:none">圏外モード：メモの保存は可能です</div>
+  </header>
+
+  <!-- ========== 画面1：メモ ========== -->
+  <div id="screen-memo" class="screen active">
+    <div class="section">基本情報</div>
+    <div class="row">
+      <div><label>日付</label><input type="date" id="f-date"></div>
+      <div><label>現場名</label><input type="text" id="f-site" placeholder="〇〇ビル など"></div>
+    </div>
+    <div class="row">
+      <div><label>リーダー</label><input type="text" id="f-leader" placeholder="任意"></div>
+      <div><label>一緒の人</label><input type="text" id="f-members" placeholder="任意"></div>
+    </div>
+    <label>自分の担当箇所</label>
+    <input type="text" id="f-myarea" placeholder="例：2Fトイレ、玄関まわり">
+
+    <div class="section">走り書き</div>
+    <div class="quickbar">
+      <button onclick="insertTime()">🕐 今の時刻</button>
+      <button onclick="insertText('！')">！指摘</button>
+      <button onclick="insertText('\n')">改行</button>
+    </div>
+    <textarea id="f-memo" rows="9" placeholder="0930 玄 掃き&#10;1015 ト ！鏡ふき残し"></textarea>
+    <button class="btn-main" onclick="saveMemo()">この記録を保存</button>
+    <div id="memo-msg"></div>
+    <div class="note">入力中の内容は自動で下書き保存されます。アプリを閉じても消えません。</div>
+  </div>
+
+  <!-- ========== 画面2：一覧・整形 ========== -->
+  <div id="screen-list" class="screen">
+    <div id="list-view">
+      <div class="section">保存済みの記録</div>
+      <div id="memo-list"></div>
+      <div class="note">記録を選ぶと、追記と整形（要Wi-Fi）ができます。</div>
+    </div>
+    <div id="detail-view" style="display:none">
+      <div class="section" id="d-title">記録の詳細</div>
+      <label>走り書き（保存済み）</label>
+      <div class="result-box" id="d-raw"></div>
+      <label>帰宅後の追記<span class="hint">思い出したまま書き殴りで</span></label>
+      <textarea id="d-addendum" rows="4" placeholder="〇〇さんに換気扇も見てって言われた気がする"></textarea>
+      <button class="btn-main" id="d-format-btn" onclick="formatMemo()">整形を申し付ける（要Wi-Fi）</button>
+      <div id="d-msg"></div>
+      <div id="d-result-area" style="display:none">
+        <label style="margin-top:16px">整形結果</label>
+        <div class="result-box" id="d-result"></div>
+        <button class="btn-sub" onclick="copyResult()" id="copy-btn">結果をコピー（→ドキュメントへ）</button>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:20px">
+        <button class="btn-sub" onclick="backToList()">← 一覧へ戻る</button>
+        <button class="btn-sub btn-danger" onclick="deleteMemo()">この記録を削除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 画面3：設定 ========== -->
+  <div id="screen-settings" class="screen">
+    <div class="section">設定</div>
+    <label>Anthropic APIキー</label>
+    <input type="password" id="s-apikey" placeholder="sk-ant- から始まる鍵">
+    <button class="btn-main" onclick="saveApiKey()">鍵を保存</button>
+    <div id="s-msg"></div>
+    <div class="note">
+      鍵はこのiPhoneの中にだけ保存されます。ネット上やGitHubには一切送られません。<br>
+      鍵の発行・無効化・利用上限の設定は Anthropic Console（console.anthropic.com）から行えます。<br><br>
+      整形1回あたりの料金目安：1円未満（Haiku使用）
+    </div>
+  </div>
+</div>
+
+<nav>
+  <button id="nav-memo" class="active" onclick="showScreen('memo')">✍️ メモ</button>
+  <button id="nav-list" onclick="showScreen('list')">📋 記録・整形</button>
+  <button id="nav-settings" onclick="showScreen('settings')">⚙️ 設定</button>
+</nav>
+
+<script>
+// ─────────────────────────────────────────
+// 業務記録 整形係 v1.0
+// 現場（圏外）でメモ → 帰宅後（Wi-Fi）でAI整形
+// ─────────────────────────────────────────
+
+const SYSTEM_PROMPT = `あなたは清掃業務の記録を整理する有能な秘書です。
+ユーザーから「基本情報」「現場での走り書きメモ」、場合によっては「帰宅後に思い出して追記した内容」が渡されます。
+
+以下のルールで整形してください：
+1. タイトルを【日付_現場名】の形式で先頭に付ける（基本情報の値を使う。どちらかが空の場合は「不明」と入れる）
+2. タイトルの直下に「■基本情報」の節を置き、リーダー・一緒に働いた人・自分の担当箇所を記載する（空欄の項目は省略）
+3. 誤字脱字・省略・暗号的な略記（例：「玄」=玄関、「ト」=トイレ、「！」=指摘事項、4桁数字=時刻）を文脈から補って正式な文章に整える
+4. 帰宅後の追記がある場合は、本文と時系列を整合させて自然に統合する
+5. 各作業の開始時刻から、次の作業開始時刻までの所要時間を計算して各項目に付記する（最後の作業は終了時刻があれば使用、なければ「所要時間不明」）
+6. 指摘されたこと・注意点は「■指摘・注意点」として末尾に独立した節でまとめる
+7. Googleドキュメントにそのまま貼り付けられるプレーンテキスト形式で出力する（Markdown記号は使わない）
+8. 出力は整形結果のみ。前置きや解説は一切書かない`;
+
+const MODEL = "claude-haiku-4-5-20251001";
+
+// ── ユーティリティ ──
+const $ = (id) => document.getElementById(id);
+const load = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const todayStr = () => {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+};
+
+let currentId = null;
+
+// ── 画面切り替え ──
+function showScreen(name) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  $("screen-" + name).classList.add("active");
+  $("nav-" + name).classList.add("active");
+  if (name === "list") { backToList(); renderList(); }
+}
+
+// ── メモ画面：下書き自動保存 ──
+const draftFields = ["f-date","f-site","f-leader","f-members","f-myarea","f-memo"];
+function saveDraft() {
+  const d = {};
+  draftFields.forEach(id => d[id] = $(id).value);
+  save("draft", d);
+}
+function restoreDraft() {
+  const d = load("draft", null);
+  if (d) draftFields.forEach(id => { if (d[id] !== undefined) $(id).value = d[id]; });
+  if (!$("f-date").value) $("f-date").value = todayStr();
+}
+draftFields.forEach(id => document.addEventListener("DOMContentLoaded",
+  () => $(id).addEventListener("input", saveDraft)));
+
+// ── クイック入力 ──
+function insertText(t) {
+  const ta = $("f-memo");
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0, s) + t + ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s + t.length;
+  ta.focus(); saveDraft();
+}
+function insertTime() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  const prefix = $("f-memo").value && !$("f-memo").value.endsWith("\n") ? "\n" : "";
+  insertText(`${prefix}${p(d.getHours())}${p(d.getMinutes())} `);
+}
+
+// ── 記録の保存 ──
+function saveMemo() {
+  if (!$("f-memo").value.trim()) {
+    return showMsg("memo-msg", "error", "走り書きが空です。一文字でも構いませんので。");
+  }
+  const memos = load("memos", []);
+  memos.unshift({
+    id: Date.now(),
+    date: $("f-date").value,
+    site: $("f-site").value,
+    leader: $("f-leader").value,
+    members: $("f-members").value,
+    myArea: $("f-myarea").value,
+    raw: $("f-memo").value,
+    addendum: "",
+    result: "",
+  });
+  save("memos", memos);
+  // 下書きをクリア（日付は今日に戻す）
+  draftFields.forEach(id => $(id).value = "");
+  $("f-date").value = todayStr();
+  save("draft", {});
+  showMsg("memo-msg", "ok", "保存しました。「記録・整形」から確認できます。");
+}
+
+// ── 一覧・詳細 ──
+function renderList() {
+  const memos = load("memos", []);
+  const el = $("memo-list");
+  if (!memos.length) {
+    el.innerHTML = '<div class="note">まだ記録がありません。「メモ」画面から保存してください。</div>';
+    return;
+  }
+  el.innerHTML = memos.map(m => `
+    <div class="memo-item" onclick="openDetail(${m.id})">
+      <div class="title">${esc(m.date || "日付不明")}　${esc(m.site || "現場名不明")}
+        ${m.result ? '<span class="badge">整形済</span>' : ''}</div>
+      <div class="meta">${esc(m.raw.slice(0, 40))}${m.raw.length > 40 ? "…" : ""}</div>
+    </div>`).join("");
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+function openDetail(id) {
+  const m = load("memos", []).find(x => x.id === id);
+  if (!m) return;
+  currentId = id;
+  $("list-view").style.display = "none";
+  $("detail-view").style.display = "block";
+  $("d-title").textContent = `${m.date || "日付不明"}　${m.site || "現場名不明"}`;
+  $("d-raw").textContent = m.raw;
+  $("d-addendum").value = m.addendum || "";
+  $("d-msg").innerHTML = "";
+  if (m.result) {
+    $("d-result").textContent = m.result;
+    $("d-result-area").style.display = "block";
+  } else {
+    $("d-result-area").style.display = "none";
+  }
+}
+function backToList() {
+  currentId = null;
+  $("detail-view").style.display = "none";
+  $("list-view").style.display = "block";
+  renderList();
+}
+function deleteMemo() {
+  if (!confirm("この記録を削除します。よろしいですか？")) return;
+  save("memos", load("memos", []).filter(x => x.id !== currentId));
+  backToList();
+}
+
+// ── AI整形 ──
+async function formatMemo() {
+  const apiKey = load("apiKey", "");
+  if (!apiKey) return showMsg("d-msg", "error", "先に「設定」画面でAPIキーを保存してください。");
+  if (!navigator.onLine) return showMsg("d-msg", "error", "オフラインです。Wi-Fiに繋がる場所でお試しください。");
+
+  const memos = load("memos", []);
+  const m = memos.find(x => x.id === currentId);
+  if (!m) return;
+  m.addendum = $("d-addendum").value;
+
+  const jp = (m.date || "").replaceAll("-", "/");
+  const userContent =
+    `【基本情報】\n日付：${jp}\n現場名：${m.site}\nリーダー：${m.leader}\n一緒に働いた人：${m.members}\n自分の担当箇所：${m.myArea}\n\n` +
+    `【現場での走り書きメモ】\n${m.raw}` +
+    (m.addendum.trim() ? `\n\n【※以降は帰宅後に思い出して追記した内容】\n${m.addendum}` : "");
+
+  const btn = $("d-format-btn");
+  btn.disabled = true; btn.textContent = "整形中……少々お待ちを";
+  $("d-msg").innerHTML = "";
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1500,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }],
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || "API error");
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+    if (!text) throw new Error("empty");
+    m.result = text;
+    save("memos", memos);
+    $("d-result").textContent = text;
+    $("d-result-area").style.display = "block";
+  } catch (e) {
+    const hint = String(e.message).includes("authentication")
+      ? "APIキーが正しくない可能性があります。設定画面をご確認ください。"
+      : "少し待ってからもう一度お試しください。";
+    showMsg("d-msg", "error", "整形に失敗しました。" + hint);
+  } finally {
+    btn.disabled = false; btn.textContent = "整形を申し付ける（要Wi-Fi）";
+  }
+}
+
+function copyResult() {
+  const text = $("d-result").textContent;
+  const done = () => {
+    $("copy-btn").textContent = "✓ 写し取りました";
+    setTimeout(() => $("copy-btn").textContent = "結果をコピー（→ドキュメントへ）", 2000);
+  };
+  navigator.clipboard.writeText(text).then(done).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy");
+    document.body.removeChild(ta); done();
+  });
+}
+
+// ── 設定 ──
+function saveApiKey() {
+  const k = $("s-apikey").value.trim();
+  if (!k.startsWith("sk-ant-")) {
+    return showMsg("s-msg", "error", "sk-ant- から始まる鍵をご確認ください。");
+  }
+  save("apiKey", k);
+  showMsg("s-msg", "ok", "鍵を保存しました。このiPhoneの中にだけ保管されます。");
+}
+
+// ── メッセージ表示 ──
+function showMsg(id, type, text) {
+  $(id).innerHTML = `<div class="msg ${type}">${esc(text)}</div>`;
+  if (type === "ok") setTimeout(() => { $(id).innerHTML = ""; }, 3000);
+}
+
+// ── オフライン表示・初期化 ──
+function updateOnlineStatus() {
+  $("offlineFlag").style.display = navigator.onLine ? "none" : "block";
+}
+window.addEventListener("online", updateOnlineStatus);
+window.addEventListener("offline", updateOnlineStatus);
+
+document.addEventListener("DOMContentLoaded", () => {
+  restoreDraft();
+  $("s-apikey").value = load("apiKey", "");
+  updateOnlineStatus();
+});
+
+// ── Service Worker（圏外でも起動する仕掛け） ──
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>
