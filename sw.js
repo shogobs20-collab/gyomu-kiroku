@@ -1,7 +1,7 @@
 // 圏外でもアプリを起動させるための仕掛け（Service Worker）
 // 初回アクセス時にアプリ一式をiPhone内に写し取り、以後はそこから開く
 
-const CACHE = "gyomu-kiroku-v1";
+const CACHE = "gyomu-kiroku-v2";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
