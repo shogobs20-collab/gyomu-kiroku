@@ -108,7 +108,6 @@
       <button onclick="insertTime()">🕐 今の時刻</button>
       <button onclick="insertText('！')">！指摘</button>
       <button onclick="insertText('※')">※メモ</button>
-      <button onclick="insertText('\n')">改行</button>
     </div>
     <textarea id="f-memo" rows="9" placeholder="0930 玄 掃き&#10;1015 ト ！鏡ふき残し"></textarea>
     <button class="btn-main" onclick="saveMemo()">この記録を保存</button>
@@ -125,8 +124,34 @@
     </div>
     <div id="detail-view" style="display:none">
       <div class="section" id="d-title">記録の詳細</div>
-      <label>走り書き（保存済み）</label>
-      <div class="result-box" id="d-raw"></div>
+
+      <!-- 閲覧モード -->
+      <div id="d-view-mode">
+        <label>走り書き（保存済み）</label>
+        <div class="result-box" id="d-raw"></div>
+      </div>
+
+      <!-- 編集モード -->
+      <div id="d-edit-mode" style="display:none">
+        <div class="section">基本情報の修正</div>
+        <div class="row">
+          <div><label>日付</label><input type="date" id="e-date"></div>
+          <div><label>現場名</label><input type="text" id="e-site"></div>
+        </div>
+        <div class="row">
+          <div><label>リーダー</label><input type="text" id="e-leader"></div>
+          <div><label>一緒の人</label><input type="text" id="e-members"></div>
+        </div>
+        <label>自分の担当箇所</label>
+        <input type="text" id="e-myarea">
+        <label>走り書きの修正</label>
+        <textarea id="e-memo" rows="8"></textarea>
+        <div style="display:flex; gap:10px">
+          <button class="btn-main" style="flex:1" onclick="saveEdit()">修正を保存</button>
+          <button class="btn-sub" onclick="cancelEdit()">やめる</button>
+        </div>
+      </div>
+
       <label>帰宅後の追記<span class="hint">思い出したまま書き殴りで</span></label>
       <textarea id="d-addendum" rows="4" placeholder="〇〇さんに換気扇も見てって言われた気がする"></textarea>
       <button class="btn-main" id="d-format-btn" onclick="formatMemo()">整形を申し付ける（要Wi-Fi）</button>
@@ -138,6 +163,7 @@
       </div>
       <div style="display:flex; gap:10px; margin-top:20px">
         <button class="btn-sub" onclick="backToList()">← 一覧へ戻る</button>
+        <button class="btn-sub" id="d-edit-btn" onclick="startEdit()">✏️ この記録を編集</button>
         <button class="btn-sub btn-danger" onclick="deleteMemo()">この記録を削除</button>
       </div>
     </div>
@@ -182,7 +208,7 @@ const SYSTEM_PROMPT = `あなたは清掃業務の記録を整理する有能な
 6. 時刻はすべて「hh:mm」形式（例：09:30、14:05）に統一する。「9時30分」等の表記は使わない
 7. 各作業の開始時刻から、次の作業開始時刻までの所要時間を計算して各項目に付記する（最後の作業は終了時刻があれば使用、なければ「所要時間不明」）
 8. 指摘されたこと・注意点は「■指摘・注意点」として末尾に独立した節でまとめる
-9. 「※」の付いた覚え書きがある場合は「■メモ」として末尾に独立した節でまとめる（指摘とは区別する）
+9. 「※」の付いた覚え書きは一箇所にまとめず、該当する作業・場所の項目の直下に「※メモ：〜」の形でそのまま残す。どの作業にも属さない全体的な覚え書きだけを、末尾に「■メモ」として記載する
 10. Googleドキュメントにそのまま貼り付けられるプレーンテキスト形式で出力する（Markdown記号は使わない）
 11. 出力は整形結果のみ。前置きや解説は一切書かない`;
 
@@ -285,6 +311,7 @@ function openDetail(id) {
   currentId = id;
   $("list-view").style.display = "none";
   $("detail-view").style.display = "block";
+  cancelEdit();
   $("d-title").textContent = `${m.date || "日付不明"}　${m.site || "現場名不明"}`;
   $("d-raw").textContent = m.raw;
   $("d-addendum").value = m.addendum || "";
@@ -295,6 +322,42 @@ function openDetail(id) {
   } else {
     $("d-result-area").style.display = "none";
   }
+}
+
+// ── 記録の編集 ──
+function startEdit() {
+  const m = load("memos", []).find(x => x.id === currentId);
+  if (!m) return;
+  $("e-date").value = m.date || "";
+  $("e-site").value = m.site || "";
+  $("e-leader").value = m.leader || "";
+  $("e-members").value = m.members || "";
+  $("e-myarea").value = m.myArea || "";
+  $("e-memo").value = m.raw || "";
+  $("d-view-mode").style.display = "none";
+  $("d-edit-mode").style.display = "block";
+  $("d-edit-btn").style.display = "none";
+}
+function saveEdit() {
+  const memos = load("memos", []);
+  const m = memos.find(x => x.id === currentId);
+  if (!m) return;
+  m.date = $("e-date").value;
+  m.site = $("e-site").value;
+  m.leader = $("e-leader").value;
+  m.members = $("e-members").value;
+  m.myArea = $("e-myarea").value;
+  m.raw = $("e-memo").value;
+  save("memos", memos);
+  cancelEdit();
+  $("d-title").textContent = `${m.date || "日付不明"}　${m.site || "現場名不明"}`;
+  $("d-raw").textContent = m.raw;
+  showMsg("d-msg", "ok", "修正を保存しました。整形し直す場合はもう一度「整形を申し付ける」を。");
+}
+function cancelEdit() {
+  $("d-edit-mode").style.display = "none";
+  $("d-view-mode").style.display = "block";
+  $("d-edit-btn").style.display = "";
 }
 function backToList() {
   currentId = null;
