@@ -64,6 +64,8 @@
     background: #0e101a; border: 1px solid #3d4361; border-radius: 8px;
     padding: 14px 16px; white-space: pre-wrap; font-size: 13px; line-height: 1.8; margin: 10px 0;
   }
+  .result-box h2 { font-size: 16px; color: #eceef5; margin: 4px 0 8px; letter-spacing: .04em; }
+  .result-box h3 { font-size: 14px; color: #b8bccf; margin: 12px 0 4px; border-bottom: 1px solid #2e3348; padding-bottom: 3px; }
   .note { font-size: 11px; color: #5f6479; line-height: 1.9; margin-top: 14px; }
   nav {
     position: fixed; bottom: 0; left: 0; right: 0;
@@ -94,14 +96,16 @@
     <div class="section">基本情報</div>
     <div class="row">
       <div><label>日付</label><input type="date" id="f-date"></div>
-      <div><label>現場名</label><input type="text" id="f-site" placeholder="〇〇ビル など"></div>
+      <div><label>地名</label><input type="text" id="f-place" placeholder="例：松戸"></div>
     </div>
     <div class="row">
+      <div><label>現場名</label><input type="text" id="f-site" placeholder="〇〇様 / 〇〇ビル など"></div>
       <div><label>リーダー</label><input type="text" id="f-leader" placeholder="任意"></div>
-      <div><label>一緒の人</label><input type="text" id="f-members" placeholder="任意"></div>
     </div>
-    <label>自分の担当箇所</label>
-    <input type="text" id="f-myarea" placeholder="例：2Fトイレ、玄関まわり">
+    <div class="row">
+      <div><label>一緒の人</label><input type="text" id="f-members" placeholder="任意"></div>
+      <div><label>自分の担当箇所</label><input type="text" id="f-myarea" placeholder="例：2Fトイレ"></div>
+    </div>
 
     <div class="section">走り書き</div>
     <div class="quickbar">
@@ -120,7 +124,7 @@
     <div id="list-view">
       <div class="section">保存済みの記録</div>
       <div id="memo-list"></div>
-      <div class="note">記録を選ぶと、追記と整形（要Wi-Fi）ができます。</div>
+      <div class="note">記録を選ぶと、感想の記入と整形（要Wi-Fi）ができます。</div>
     </div>
     <div id="detail-view" style="display:none">
       <div class="section" id="d-title">記録の詳細</div>
@@ -136,14 +140,16 @@
         <div class="section">基本情報の修正</div>
         <div class="row">
           <div><label>日付</label><input type="date" id="e-date"></div>
-          <div><label>現場名</label><input type="text" id="e-site"></div>
+          <div><label>地名</label><input type="text" id="e-place"></div>
         </div>
         <div class="row">
+          <div><label>現場名</label><input type="text" id="e-site"></div>
           <div><label>リーダー</label><input type="text" id="e-leader"></div>
-          <div><label>一緒の人</label><input type="text" id="e-members"></div>
         </div>
-        <label>自分の担当箇所</label>
-        <input type="text" id="e-myarea">
+        <div class="row">
+          <div><label>一緒の人</label><input type="text" id="e-members"></div>
+          <div><label>自分の担当箇所</label><input type="text" id="e-myarea"></div>
+        </div>
         <label>走り書きの修正</label>
         <textarea id="e-memo" rows="8"></textarea>
         <div style="display:flex; gap:10px">
@@ -152,8 +158,8 @@
         </div>
       </div>
 
-      <label>帰宅後の追記<span class="hint">思い出したまま書き殴りで</span></label>
-      <textarea id="d-addendum" rows="4" placeholder="〇〇さんに換気扇も見てって言われた気がする"></textarea>
+      <label>感想<span class="hint">今日の所感を自由に（任意）</span></label>
+      <textarea id="d-addendum" rows="4" placeholder="今日は時間配分がうまくいった気がする 等"></textarea>
       <button class="btn-main" id="d-format-btn" onclick="formatMemo()">整形を申し付ける（要Wi-Fi）</button>
       <div id="d-msg"></div>
       <div id="d-result-area" style="display:none">
@@ -200,19 +206,20 @@ const SYSTEM_PROMPT = `あなたは清掃業務の記録を整理する有能な
 ユーザーから「基本情報」「現場での走り書きメモ」、場合によっては「帰宅後に思い出して追記した内容」が渡されます。
 
 以下のルールで整形してください：
-1. タイトルを【日付_現場名】の形式で先頭に付ける（基本情報の値を使う。どちらかが空の場合は「不明」と入れる）
+1. 1行目には【タイトル】として渡された文字列を一字も変えずにそのまま置く
 2. タイトルの直下に「■基本情報」の節を置き、最初に日付と曜日（例：2026/07/03（金））、続けてリーダー・一緒に働いた人・自分の担当箇所を記載する（空欄の項目は省略）
 3. 誤字脱字・省略・暗号的な略記（例：「玄」=玄関、「ト」=トイレ、「！」=指摘事項、「※」=書き手自身の覚え書き、4桁数字=時刻）を文脈から補って正式な文章に整える
 4. 【最重要】行為の主体を絶対に変えないこと。「〜してもらう」「〜を依頼」「〜に頼んだ」等は、書き手ではなく他の人が行った（行う）ことを意味する。これを「実施」等の書き手本人が行った表現に書き換えてはならない。誰が何をしたのかのニュアンスを厳密に保持する
 5. 【最重要】「！」や「※」の行は、原則としてその直前の作業項目（直近の時刻付きの行）に関する内容として扱う。指摘やメモに場所・対象が明記されていない場合、推測で場所名や対象物を補ってはならない。書かれていない情報を付け加えず、必要なら場所は直前の作業項目のものをそのまま使う
 6. 【最重要】走り書きに書かれた作業項目を一つも省略・統合しないこと。時刻付きの行はそれぞれ独立した作業として全て出力する。名称が似ていても（例：「ベランダ側」と「ベランダ側（室内）」）別の作業であり、一つにまとめてはならない。出力前に、走り書きの時刻付き行の数と出力の作業項目の数が一致しているか確認する
-7. 帰宅後の追記がある場合は、本文と時系列を整合させて自然に統合する
+7. 作業項目の一覧は「■作業記録」という節名の下に置く
 8. 時刻はすべて「hh:mm」形式（例：09:30、14:05）に統一する。「9時30分」等の表記は使わない
 9. 作業項目の行は必ず「開始時刻-終了時刻 【所要時間】 作業場所・内容」の形式で書く（例：10:00-10:25 【25分】 キッチン（食品庫側））。終了時刻は次の作業の開始時刻とする。最後の作業は終了時刻の記載があればそれを使い、なければ「【所要時間不明】」とする
 10. 「！」の付いた指摘・注意点は、該当する作業項目の直下に「！〜」の形でそのまま残す。末尾に同じ内容を再掲しないこと（重複禁止）。どの作業にも属さない全体的な指摘だけを、末尾に「■指摘・注意点」として記載する（該当がなければこの節自体を作らない）
 11. 「※」の付いた覚え書きは一箇所にまとめず、該当する作業・場所の項目の直下に「※メモ：〜」の形でそのまま残す。どの作業にも属さない全体的な覚え書きだけを、末尾に「■メモ」として記載する
-12. Googleドキュメントにそのまま貼り付けられるプレーンテキスト形式で出力する（Markdown記号は使わない）
-13. 出力は整形結果のみ。前置きや解説は一切書かない`;
+12. 【感想】が渡された場合は、末尾に「■感想」の節を置き、誤字の修正程度にとどめて内容を変えずに記載する。作業記録には混ぜない。渡されなければこの節は作らない
+13. Googleドキュメントにそのまま貼り付けられるプレーンテキスト形式で出力する（Markdown記号は使わない）
+14. 出力は整形結果のみ。前置きや解説は一切書かない`;
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -237,7 +244,7 @@ function showScreen(name) {
 }
 
 // ── メモ画面：下書き自動保存 ──
-const draftFields = ["f-date","f-site","f-leader","f-members","f-myarea","f-memo"];
+const draftFields = ["f-date","f-place","f-site","f-leader","f-members","f-myarea","f-memo"];
 function saveDraft() {
   const d = {};
   draftFields.forEach(id => d[id] = $(id).value);
@@ -274,6 +281,7 @@ function saveMemo() {
   memos.unshift({
     id: Date.now(),
     date: $("f-date").value,
+    place: $("f-place").value,
     site: $("f-site").value,
     leader: $("f-leader").value,
     members: $("f-members").value,
@@ -331,6 +339,7 @@ function startEdit() {
   const m = load("memos", []).find(x => x.id === currentId);
   if (!m) return;
   $("e-date").value = m.date || "";
+  $("e-place").value = m.place || "";
   $("e-site").value = m.site || "";
   $("e-leader").value = m.leader || "";
   $("e-members").value = m.members || "";
@@ -345,6 +354,7 @@ function saveEdit() {
   const m = memos.find(x => x.id === currentId);
   if (!m) return;
   m.date = $("e-date").value;
+  m.place = $("e-place").value;
   m.site = $("e-site").value;
   m.leader = $("e-leader").value;
   m.members = $("e-members").value;
@@ -392,10 +402,13 @@ async function formatMemo() {
     if (!isNaN(dObj)) youbi = `（${wd[dObj.getDay()]}）`;
   }
   const together = [m.leader, m.members].filter(s => s && s.trim()).join("、");
+  const ymd = (m.date || "").replaceAll("-", "");
+  const title = `業務日報メモ：（${(m.place || "").trim() || "地名不明"}） ${(m.site || "").trim() || "現場名不明"}案件（${ymd || "日付不明"}）`;
   const userContent =
+    `【タイトル】\n${title}\n\n` +
     `【基本情報】\n日付：${jp}${youbi}\n現場名：${m.site}\nリーダー：${m.leader}\n一緒に働いた人：${together}\n自分の担当箇所：${m.myArea}\n\n` +
     `【現場での走り書きメモ】\n${m.raw}` +
-    (m.addendum.trim() ? `\n\n【※以降は帰宅後に思い出して追記した内容】\n${m.addendum}` : "");
+    (m.addendum.trim() ? `\n\n【感想】\n${m.addendum}` : "");
 
   const btn = $("d-format-btn");
   btn.disabled = true; btn.textContent = "整形中……少々お待ちを";
@@ -435,13 +448,16 @@ async function formatMemo() {
   }
 }
 
-// 作業項目の行（hh:mm-… 【…】）を太字にしたHTMLを作る
+// 整形結果をHTML化：タイトル行→見出し2、■節→見出し3、作業行→太字
 function resultToHtml(text) {
   return text.split("\n").map(line => {
+    const t = line.trim();
     const e = esc(line);
-    const isItem = /^\d{1,2}:\d{2}-/.test(line.trim()) && line.includes("【");
-    return isItem ? `<strong>${e}</strong>` : e;
-  }).join("<br>");
+    if (t.startsWith("業務日報メモ：")) return `<h2>${esc(t)}</h2>`;
+    if (t.startsWith("■")) return `<h3>${esc(t)}</h3>`;
+    const isItem = /^\d{1,2}:\d{2}-/.test(t) && line.includes("【");
+    return (isItem ? `<strong>${e}</strong>` : e) + "<br>";
+  }).join("");
 }
 // 画面表示：太字付きで描画し、元テキストも保持
 function renderResult(text) {
