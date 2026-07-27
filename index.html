@@ -166,6 +166,7 @@
         <label style="margin-top:16px">整形結果</label>
         <div class="result-box" id="d-result"></div>
         <button class="btn-sub" onclick="copyResult()" id="copy-btn">結果をコピー（→ドキュメントへ）</button>
+        <button class="btn-sub" onclick="sendToDoc()" id="send-btn" style="margin-left:8px">📤 ドキュメントへ送信</button>
       </div>
       <div style="display:flex; gap:10px; margin-top:20px">
         <button class="btn-sub" onclick="backToList()">← 一覧へ戻る</button>
@@ -186,6 +187,18 @@
       鍵はこのiPhoneの中にだけ保存されます。ネット上やGitHubには一切送られません。<br>
       鍵の発行・無効化・利用上限の設定は Anthropic Console（console.anthropic.com）から行えます。<br><br>
       整形1回あたりの料金目安：1円未満（Haiku使用）
+    </div>
+
+    <div class="section" style="margin-top:26px">ドキュメント自動送信（受付係）</div>
+    <label>受付係のURL<span class="hint">GASのウェブアプリURL（/exec で終わるもの）</span></label>
+    <input type="text" id="s-gasurl" placeholder="https://script.google.com/macros/s/…/exec">
+    <label>合言葉<span class="hint">GASのTOKENと同じ文字列</span></label>
+    <input type="password" id="s-gastoken" placeholder="受付係に設定した合言葉">
+    <button class="btn-main" onclick="saveGasSettings()">送信設定を保存</button>
+    <div id="s-gas-msg"></div>
+    <div class="note">
+      送信すると、現場名に対応するGoogleドキュメントの「自動日報」タブ末尾に、
+      日付＋曜日の見出し付きで日報が追記されます。現場の追加は受付係（GAS）の対応表で行います。
     </div>
   </div>
 </div>
@@ -305,7 +318,7 @@ function renderList() {
   el.innerHTML = memos.map(m => `
     <div class="memo-item" onclick="openDetail(${m.id})">
       <div class="title">${esc(m.date || "日付不明")}　${esc(m.site || "現場名不明")}
-        ${m.result ? '<span class="badge">整形済</span>' : ''}</div>
+        ${m.result ? '<span class="badge">整形済</span>' : ''}${m.sentAt ? '<span class="badge">送信済</span>' : ''}</div>
       <div class="meta">${esc(m.raw.slice(0, 40))}${m.raw.length > 40 ? "…" : ""}</div>
     </div>`).join("");
 }
@@ -555,6 +568,62 @@ async function copyResult() {
   }
 }
 
+// ── ドキュメントへ自動送信 ──
+async function sendToDoc() {
+  const gasUrl = load("gasUrl", "");
+  const gasToken = load("gasToken", "");
+  if (!gasUrl) return showMsg("d-msg", "error", "先に「設定」画面で受付係のURLを保存してください。");
+  if (!navigator.onLine) return showMsg("d-msg", "error", "オフラインです。Wi-Fiに繋がる場所でお試しください。");
+
+  const memos = load("memos", []);
+  const m = memos.find(x => x.id === currentId);
+  if (!m || !m.result) return showMsg("d-msg", "error", "先に整形を済ませてください。");
+
+  // 日付＋曜日の見出し（例：2026/07/28（火））をJS側で確定
+  let dateHeading = (m.date || "").replaceAll("-", "/") || "日付不明";
+  if (m.date) {
+    const wd = ["日","月","火","水","木","金","土"];
+    const dObj = new Date(m.date + "T00:00:00");
+    if (!isNaN(dObj)) dateHeading += `（${wd[dObj.getDay()]}）`;
+  }
+
+  const btn = $("send-btn");
+  btn.disabled = true; btn.textContent = "送信中……";
+  $("d-msg").innerHTML = "";
+  try {
+    const res = await fetch(gasUrl, {
+      method: "POST",
+      // content-typeを指定しない（text/plain扱い）ことで確実に届く
+      body: JSON.stringify({
+        token: gasToken,
+        site: (m.site || "").trim(),
+        dateHeading: dateHeading,
+        report: m.result,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "送信に失敗しました");
+    m.sentAt = Date.now();
+    save("memos", memos);
+    showMsg("d-msg", "ok", "ドキュメントに追記しました。");
+  } catch (e) {
+    showMsg("d-msg", "error", "送信できませんでした。" + String(e.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = "📤 ドキュメントへ送信";
+  }
+}
+
+function saveGasSettings() {
+  const url = $("s-gasurl").value.trim();
+  const token = $("s-gastoken").value.trim();
+  if (url && !url.startsWith("https://script.google.com/")) {
+    return showMsg("s-gas-msg", "error", "URLは https://script.google.com/ で始まるものを貼ってください。");
+  }
+  save("gasUrl", url);
+  save("gasToken", token);
+  showMsg("s-gas-msg", "ok", "送信設定を保存しました。");
+}
+
 // ── 設定 ──
 function saveApiKey() {
   const k = $("s-apikey").value.trim();
@@ -581,6 +650,8 @@ window.addEventListener("offline", updateOnlineStatus);
 document.addEventListener("DOMContentLoaded", () => {
   restoreDraft();
   $("s-apikey").value = load("apiKey", "");
+  $("s-gasurl").value = load("gasUrl", "");
+  $("s-gastoken").value = load("gasToken", "");
   updateOnlineStatus();
 });
 
