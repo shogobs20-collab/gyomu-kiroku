@@ -124,7 +124,7 @@
     <div id="list-view">
       <div class="section">保存済みの記録</div>
       <div id="memo-list"></div>
-      <div class="note">記録を選ぶと、感想の記入と整形（要Wi-Fi）ができます。</div>
+      <div class="note">記録を選ぶと、感想の記入・保存と、仕上げ（AIあり／なし）ができます。</div>
     </div>
     <div id="detail-view" style="display:none">
       <div class="section" id="d-title">記録の詳細</div>
@@ -158,12 +158,18 @@
         </div>
       </div>
 
-      <label>感想<span class="hint">今日の所感を自由に（任意）</span></label>
-      <textarea id="d-addendum" rows="4" placeholder="今日は時間配分がうまくいった気がする 等"></textarea>
-      <button class="btn-main" id="d-format-btn" onclick="formatMemo()">整形を申し付ける（要Wi-Fi）</button>
+      <label>感想・連絡事項<span class="hint">保存できます（任意）</span></label>
+      <textarea id="d-addendum" rows="4" placeholder="連絡事項や今日の所感など。ここに書いて『感想を保存』を押せば残ります"></textarea>
+      <button class="btn-sub" onclick="saveAddendum()" id="save-memo-btn">💾 感想・連絡事項を保存</button>
+      <div id="d-addendum-msg"></div>
+
+      <div style="margin-top:22px">
+        <button class="btn-main" id="d-format-btn" onclick="buildReport(true)">AI整形して仕上げる（要Wi-Fi）</button>
+        <button class="btn-sub" onclick="buildReport(false)" id="d-noai-btn" style="width:100%; margin-top:8px">AIなしで仕上げる（無料・きれいに編集済みの日はこちら）</button>
+      </div>
       <div id="d-msg"></div>
       <div id="d-result-area" style="display:none">
-        <label style="margin-top:16px">整形結果</label>
+        <label style="margin-top:16px">仕上がり</label>
         <div class="result-box" id="d-result"></div>
         <button class="btn-sub" onclick="copyResult()" id="copy-btn">結果をコピー（→ドキュメントへ）</button>
         <button class="btn-sub" onclick="sendToDoc()" id="send-btn" style="margin-left:8px">📤 ドキュメントへ送信</button>
@@ -455,20 +461,18 @@ function parseTimeline(raw) {
   return lines.join("\n");
 }
 
-// ── AI整形 ──
-async function formatMemo() {
-  const apiKey = load("apiKey", "");
-  if (!apiKey) return showMsg("d-msg", "error", "先に「設定」画面でAPIキーを保存してください。");
-  if (!navigator.onLine) return showMsg("d-msg", "error", "オフラインです。Wi-Fiに繋がる場所でお試しください。");
-
-  // 編集モードを開いたまま整形された場合は、修正を先に自動保存する
-  if ($("d-edit-mode").style.display === "block") saveEdit();
-
+// ── 感想・連絡事項の保存 ──
+function saveAddendum() {
   const memos = load("memos", []);
   const m = memos.find(x => x.id === currentId);
   if (!m) return;
   m.addendum = $("d-addendum").value;
+  save("memos", memos);
+  showMsg("d-addendum-msg", "ok", "保存しました。");
+}
 
+// 基本情報＋骨組みから、送信可能な日報テキストを組み立てる（AIなしの土台）
+function assembleReport(m) {
   const jp = (m.date || "").replaceAll("-", "/");
   let youbi = "";
   if (m.date) {
@@ -476,19 +480,56 @@ async function formatMemo() {
     const dObj = new Date(m.date + "T00:00:00");
     if (!isNaN(dObj)) youbi = `（${wd[dObj.getDay()]}）`;
   }
-  const together = [m.leader, m.members].filter(s => s && s.trim()).join("、");
+  const together = [...new Set([m.leader, m.members].flatMap(s => (s || "").split(/[、,]/).map(x => x.trim()).filter(Boolean)))].join("、");
   const ymd = (m.date || "").replaceAll("-", "");
   const title = `業務日報メモ：（${(m.place || "").trim() || "地名不明"}） ${(m.site || "").trim() || "現場名不明"}案件（${ymd || "日付不明"}）`;
+
+  const info = [`日付：${jp}${youbi}`];
+  if (m.leader && m.leader.trim()) info.push(`リーダー：${m.leader}`);
+  if (together) info.push(`一緒に働いた人：${together}`);
+  if (m.myArea && m.myArea.trim()) info.push(`自分の担当箇所：${m.myArea}`);
+
+  let out = `${title}\n\n■基本情報\n${info.join("\n")}\n\n■作業記録\n${parseTimeline(m.raw)}`;
+  if (m.addendum && m.addendum.trim()) out += `\n\n■感想\n${m.addendum.trim()}`;
+  return { title, together, jp, youbi, out };
+}
+
+// ── 仕上げ（AIあり／なしを選べる）──
+async function buildReport(useAI) {
+  if (!navigator.onLine && useAI) return showMsg("d-msg", "error", "オフラインです。AI整形はWi-Fi環境で。");
+  // 編集モードを開いたままなら、先に保存
+  if ($("d-edit-mode").style.display === "block") saveEdit();
+  else saveAddendum();
+
+  const memos = load("memos", []);
+  const m = memos.find(x => x.id === currentId);
+  if (!m) return;
+
+  const asm = assembleReport(m);
+
+  // ── AIなし：土台をそのまま仕上がりにする ──
+  if (!useAI) {
+    m.result = asm.out;
+    save("memos", memos);
+    renderResult(asm.out);
+    $("d-result-area").style.display = "block";
+    showMsg("d-msg", "ok", "AIなしで仕上げました（無料）。");
+    return;
+  }
+
+  // ── AIあり：骨組みを渡して文言だけ磨かせる ──
+  const apiKey = load("apiKey", "");
+  if (!apiKey) return showMsg("d-msg", "error", "先に「設定」画面でAPIキーを保存してください。");
+
   const userContent =
-    `【タイトル】\n${title}\n\n` +
-    `【基本情報】\n日付：${jp}${youbi}\n現場名：${m.site}\nリーダー：${m.leader}\n一緒に働いた人：${together}\n自分の担当箇所：${m.myArea}\n\n` +
+    `【タイトル】\n${asm.title}\n\n` +
+    `【基本情報】\n日付：${asm.jp}${asm.youbi}\n現場名：${m.site}\nリーダー：${m.leader}\n一緒に働いた人：${asm.together}\n自分の担当箇所：${m.myArea}\n\n` +
     `【作業記録（確定済みの骨組み）】\n${parseTimeline(m.raw)}` +
-    (m.addendum.trim() ? `\n\n【感想】\n${m.addendum}` : "");
+    (m.addendum && m.addendum.trim() ? `\n\n【感想】\n${m.addendum}` : "");
 
   const btn = $("d-format-btn");
   btn.disabled = true; btn.textContent = "整形中……少々お待ちを";
   $("d-msg").innerHTML = "";
-
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -519,7 +560,7 @@ async function formatMemo() {
       : "少し待ってからもう一度お試しください。";
     showMsg("d-msg", "error", "整形に失敗しました。" + hint);
   } finally {
-    btn.disabled = false; btn.textContent = "整形を申し付ける（要Wi-Fi）";
+    btn.disabled = false; btn.textContent = "AI整形して仕上げる（要Wi-Fi）";
   }
 }
 
